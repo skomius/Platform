@@ -2,7 +2,7 @@ name: Build and Deploy to Minikube
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   workflow_dispatch:
 
 jobs:
@@ -20,12 +20,9 @@ jobs:
       - name: Build Docker image
         run: |
           docker build -t springboot-demo:latest .
-          docker tag springboot-demo:latest your-registry/springboot-demo:latest  # Replace with your registry
-          echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin your-registry
-          docker push your-registry/springboot-demo:latest
 
   deploy:
-    runs-on: self-hosted  # Uses the runner in Minikube
+    runs-on: self-hosted
     needs: build
     steps:
       - uses: actions/checkout@v4
