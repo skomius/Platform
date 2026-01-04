@@ -1,0 +1,35 @@
+name: Build and Deploy to Minikube
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Build with Gradle
+        run: ./gradlew build
+      - name: Build Docker image
+        run: |
+          docker build -t springboot-demo:latest .
+          docker tag springboot-demo:latest your-registry/springboot-demo:latest  # Replace with your registry
+          echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin your-registry
+          docker push your-registry/springboot-demo:latest
+
+  deploy:
+    runs-on: self-hosted  # Uses the runner in Minikube
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Minikube
+        run: |
+          kubectl apply -f k8s/app-deployment.yml
+          kubectl rollout status deployment/springboot-app

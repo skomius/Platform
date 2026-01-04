@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: github-runners
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: github-runner-secret
+  namespace: github-runners
+type: Opaque
+data:
+  # Base64 encode your values: echo -n 'YOUR_PAT' | base64
+  github_token: <BASE64_ENCODED_PAT>
+  github_repo_url: <BASE64_ENCODED_REPO_URL>  # e.g., https://github.com/user/repo
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: github-runner-sa
+  namespace: github-runners
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: github-runner-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin  # Scoped to namespace in production; use RoleBinding instead
+subjects:
+- kind: ServiceAccount
+  name: github-runner-sa
+  namespace: github-runners
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: github-runner
+  namespace: github-runners
+  labels:
+    app: github-runner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: github-runner
+  template:
+    metadata:
+      labels:
+        app: github-runner
+    spec:
+      serviceAccountName: github-runner-sa
+      containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:latest
+        env:
+        - name: REPO_URL
+          valueFrom:
+            secretKeyRef:
+              name: github-runner-secret
+              key: github_repo_url
+        - name: ACCESS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-runner-secret
+              key: github_token
+        - name: RUNNER_NAME
+          value: "minikube-runner"
+        - name: RUNNER_WORKDIR
+          value: "/tmp/runner/work"
+        - name: RUNNER_LABELS
+          value: "minikube,self-hosted"
+        resources:
+          requests:
+            memory: "256Mi"  # Minimum for basic operations
+            cpu: "100m"      # ~0.1 CPU core
+          limits:
+            memory: "512Mi"  # Prevent OOM in Minikube
+            cpu: "500m"      # Cap at 0.5 core
+        volumeMounts:
+        - name: workdir
+          mountPath: /tmp/runner
+      volumes:
+      - name: workdir
+        emptyDir: {}
+      restartPolicy: Always
