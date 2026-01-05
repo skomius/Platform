@@ -17,13 +17,6 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-      - name: Verify Gradle Wrapper
-        run: |
-          ls -la gradle/wrapper/
-          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
-            echo "gradle-wrapper.jar not found, downloading..."
-            curl -L https://raw.githubusercontent.com/gradle/gradle/master/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
-          fi
       - name: Make gradlew executable
         run: chmod +x gradlew
       - name: Build with Gradle
@@ -32,7 +25,7 @@ jobs:
         run: |
           docker build -t springboot-demo:latest .
           docker tag springboot-demo:latest skomius/springboot-demo:latest  # Replace with your registry
-          echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin your-registry
+          echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin skomius
           docker push skomius/springboot-demo:latest
 
   deploy:
