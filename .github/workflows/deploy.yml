@@ -18,7 +18,7 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
       - name: Build with Gradle
-        run: ./gradlew build
+        run: ./gradlew build --no-daemon
       - name: Build Docker image
         run: |
           docker build -t springboot-demo:latest .
