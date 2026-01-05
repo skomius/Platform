@@ -33,11 +33,10 @@ jobs:
     needs: build
     steps:
       - uses: actions/checkout@v4
-      - name: Install kubectl
-        run: |
-          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          chmod +x kubectl
-          sudo mv kubectl /usr/local/bin/
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
       - name: Deploy to Minikube
         run: |
           kubectl create namespace apps --dry-run=client -o yaml | kubectl apply -f -
