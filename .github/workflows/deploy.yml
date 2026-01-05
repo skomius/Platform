@@ -40,5 +40,6 @@ jobs:
           sudo mv kubectl /usr/local/bin/
       - name: Deploy to Minikube
         run: |
+          kubectl create namespace apps --dry-run=client -o yaml | kubectl apply -f -
           kubectl apply -f k8s/app-deployment.yml
-          kubectl rollout status deployment/springboot-app
+          kubectl rollout status deployment/springboot-app -n apps
