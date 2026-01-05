@@ -80,7 +80,7 @@ spec:
     spec:
       containers:
       - name: springboot
-        image: your-registry/springboot-demo:latest  # Replace with your image
+        image: skomius/springboot-demo:latest  # Replace with your image
         ports:
         - containerPort: 8080
         resources:
