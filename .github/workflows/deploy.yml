@@ -1,0 +1,40 @@
+name: Deploy Platform Infrastructure
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  deploy-infrastructure:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+      
+      - name: Create namespace
+        run: |
+          kubectl create namespace apps --dry-run=client -o yaml | kubectl apply -f -
+      
+      - name: Deploy Elasticsearch
+        run: |
+          kubectl apply -f k8s/elasticsearch-deployment.yml
+          echo "Elasticsearch deployment applied"
+      
+      - name: Deploy Logging Stack
+        run: |
+          cd k8s
+          chmod +x logging-stack-deploy.sh
+          ./logging-stack-deploy.sh
+      
+      - name: Verify Deployments
+        run: |
+          echo "Checking deployment status..."
+          kubectl get deployments -n apps
+          kubectl get pods -n apps
+          kubectl get services -n apps

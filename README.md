@@ -1,124 +1,309 @@
 # Platform Infrastructure
 
-Kubernetes infrastructure and platform services for application deployment and monitoring.
+Kubernetes platform infrastructure for running applications on Minikube with centralized logging and CI/CD capabilities.
 
-## Overview
-
-This repository contains all platform and infrastructure configurations for deploying and managing applications on Kubernetes, including:
-- Kubernetes manifests for application deployments
-- Logging stack (Fluent Bit + Loki + Grafana)
-- Monitoring and observability tools
-- GitHub Actions runners for CI/CD
-- Database and storage configurations
+## Table of Contents
+- [Prerequisites](#prerequisites)
+- [Minikube Installation](#minikube-installation)
+- [GitHub Runner Setup](#github-runner-setup)
+- [Logging Stack Deployment](#logging-stack-deployment)
+- [Infrastructure Management](#infrastructure-management)
 
 ## Prerequisites
 
-- Kubernetes cluster (Minikube, EKS, GKE, AKS, etc.)
-- kubectl configured
-- Docker (for building images)
-- Helm (optional, for package management)
+- Windows 10/11
+- Administrative privileges
+- At least 4GB RAM available for Minikube
+- 20GB free disk space
 
-## Components
+## Minikube Installation
 
-### Application Deployment
-- **Location**: `k8s/app-deployment.yml`
-- Deploy applications to the Kubernetes cluster
+### Step 1: Install Docker Desktop
 
-### Logging Stack
-- **Fluent Bit**: Log collection and forwarding
-- **Loki**: Log aggregation and storage
-- **Grafana**: Visualization and dashboards
-- **Deploy**: `./k8s/logging-stack-deploy.sh`
+```powershell
+# Option 1: Using winget
+winget install Docker.DockerDesktop
 
-### GitHub Actions Runner
-- Self-hosted runner for CI/CD pipelines
-- **Location**: `k8s/github-runner-deployment.yml`
+# Option 2: Download and install manually
+# Visit https://www.docker.com/products/docker-desktop and download Docker Desktop for Windows
+```
 
-### PostgreSQL Backup
-- Automated database backup CronJob
-- **Location**: `k8s/postgres-backup-cronjob.yml`
+**After installation:**
+1. Start Docker Desktop from Start Menu
+2. Wait for Docker to complete startup (whale icon in system tray should be green)
+3. Verify Docker is running:
 
-### Elasticsearch
-- **Location**: `k8s/elasticsearch-deployment.yml`
+```powershell
+docker --version
+docker ps
+```
 
-## Quick Start
+### Step 2: Install kubectl
 
-### Deploy Logging Stack
-```bash
+```powershell
+# Option 1: Using Chocolatey (recommended)
+choco install kubernetes-cli
+
+# Option 2: Using winget
+winget install Kubernetes.kubectl
+
+# Option 3: Using PowerShell direct download
+curl.exe -LO "https://dl.k8s.io/release/v1.28.0/bin/windows/amd64/kubectl.exe"
+# Then move kubectl.exe to a directory in your PATH
+
+# Verify installation
+kubectl version --client
+```
+
+### Step 3: Install Minikube
+
+```powershell
+# Option 1: Using Chocolatey (recommended)
+choco install minikube
+
+# Option 2: Using winget
+winget install Kubernetes.minikube
+
+# Option 3: Download installer manually
+# Visit https://storage.googleapis.com/minikube/releases/latest/minikube-installer.exe
+# Run the installer
+
+# Verify installation
+minikube version
+```
+
+### Step 4: Start Minikube
+
+```powershell
+# Start Minikube with Docker driver
+minikube start --driver=docker --cpus=2 --memory=4096
+
+# Verify cluster is running
+kubectl cluster-info
+kubectl get nodes
+
+# Enable metrics-server (optional, for resource monitoring)
+minikube addons enable metrics-server
+```
+
+### Step 5: Create Namespace
+
+```powershell
+# Create apps namespace for deployments
+kubectl create namespace apps
+```
+
+## GitHub Runner Setup
+
+### Step 1: Generate GitHub Personal Access Token (PAT)
+
+1. Go to GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
+2. Click "Generate new token (classic)"
+3. Set note: `Minikube Self-Hosted Runner`
+4. Select scopes:
+   - `repo` (Full control of private repositories)
+   - `workflow` (Update GitHub Action workflows)
+   - `admin:org` (if using organization runner)
+5. Click "Generate token"
+6. **Copy the token immediately** (you won't see it again)
+
+### Step 2: Update GitHub Runner Deployment to local minikube
+
+Edit `k8s/github-runner-deployment.yml` and update the secret values:
+
+```powershell
+# Encode your GitHub token
+$token = "YOUR_GITHUB_TOKEN"
+$tokenBytes = [System.Text.Encoding]::UTF8.GetBytes($token)
+$tokenEncoded = [Convert]::ToBase64String($tokenBytes)
+Write-Host "Encoded token: $tokenEncoded"
+
+# Encode your repository URL
+$repoUrl = "https://github.com/YOUR_USERNAME/YOUR_REPO"
+$repoBytes = [System.Text.Encoding]::UTF8.GetBytes($repoUrl)
+$repoEncoded = [Convert]::ToBase64String($repoBytes)
+Write-Host "Encoded repo URL: $repoEncoded"
+```
+
+Replace the values in the Secret section:
+- `github_token`: Your base64-encoded PAT
+- `github_repo_url`: Your base64-encoded repository URL
+
+### Step 3: Deploy GitHub Runner
+
+```powershell
+# Navigate to k8s directory
 cd k8s
-./logging-stack-deploy.sh
+
+# Deploy runner
+kubectl apply -f github-runner-deployment.yml
+
+# Or use the deployment script (requires Git Bash or WSL)
+# bash github-runner-deploy.sh
 ```
 
-Access Grafana at `http://<node-ip>:30300` (default credentials: admin/admin)
+### Step 4: Verify Runner Registration
 
-### Deploy Application
-```bash
-kubectl apply -f k8s/app-deployment.yml
+```powershell
+# Check runner pod status
+kubectl get pods -n apps -l app=github-runner
+
+# View runner logs
+kubectl logs -n apps -l app=github-runner -f
+
+# Go to GitHub repository → Settings → Actions → Runners
+# You should see your self-hosted runner listed as "Idle" or "Active"
 ```
 
-### Deploy GitHub Runner
-```bash
-kubectl apply -f k8s/github-runner-deployment.yml
+## Logging Stack
+
+Deploying thru github workflows deploy.yml
+The logging stack consists of:
+- **Elasticsearch**: Log storage and indexing
+- **Fluent Bit**: Log collection from all pods
+- **Grafana**: Visualization and dashboards
+
+### Access Grafana
+
+```powershell
+# Option 1: Use minikube service to get the URL
+minikube service grafana -n apps --url
+
+# Option 2: Port-forward to localhost
+kubectl port-forward -n apps svc/grafana 3000:3000
+# Then access at http://localhost:3000
 ```
 
-## Monitoring and Observability
+**Login credentials:**
+- Username: `admin`
+- Password: `admin`
 
-### Grafana Access
-- URL: `http://<node-ip>:30300`
-- Default credentials: admin/admin
-- Loki is pre-configured as a data source
+### Configure Elasticsearch Data Source in Grafana
+
+1. Login to Grafana
+2. Go to Configuration → Data Sources → Add data source
+3. Select "Elasticsearch"
+4. Configure:
+   - URL: `http://elasticsearch:9200`
+   - Index name: `fluent-bit` or pattern `fluent-bit-*`
+   - Time field: `@timestamp`
+5. Click "Save & Test"
+
+### View Logs
+
+```powershell
+# Check Fluent Bit is collecting logs
+kubectl get pods -n apps -l app=fluent-bit
+
+# View Fluent Bit logs
+kubectl logs -n apps -l app=fluent-bit
+
+# Check Elasticsearch has data
+kubectl port-forward -n apps svc/elasticsearch 9200:9200
+# In another PowerShell window:
+curl http://localhost:9200/_cat/indices?v
+```
+
+## Infrastructure Management
 
 ### Useful Commands
-```bash
+
+```powershell
+# Check all deployments
+kubectl get deployments -n apps
+
 # Check all pods
 kubectl get pods -n apps
 
-# Check Fluent Bit logs
-kubectl logs -n apps -l app=fluent-bit
+# Check all services
+kubectl get services -n apps
 
-# Check Loki logs
-kubectl logs -n apps -l app=loki
+# View pod logs
+kubectl logs -n apps <pod-name>
 
-# Check Grafana logs
-kubectl logs -n apps -l app=grafana
+# Describe pod for troubleshooting
+kubectl describe pod -n apps <pod-name>
 
-# Port-forward Grafana locally
-kubectl port-forward -n apps svc/grafana 3000:3000
+# Restart a deployment
+kubectl rollout restart deployment/<deployment-name> -n apps
+
+# Delete a deployment
+kubectl delete deployment <deployment-name> -n apps
+
+# Access Minikube dashboard
+minikube dashboard
 ```
 
-## Configuration
+### Stopping and Starting Minikube
 
-### Image Registries
-Update image references in deployment manifests to point to your container registry.
+```powershell
+# Stop Minikube (preserves cluster state)
+minikube stop
 
-### Secrets Management
-Set up Kubernetes secrets for sensitive data:
-```bash
-kubectl create secret generic <secret-name> --from-literal=key=value
+# Start Minikube again
+minikube start
+
+# Delete Minikube cluster (removes everything)
+minikube delete
 ```
+
+### Troubleshooting
+
+**Pods not starting:**
+```powershell
+kubectl describe pod -n apps <pod-name>
+kubectl logs -n apps <pod-name>
+```
+
+**Service not accessible:**
+```powershell
+# Check service endpoints
+kubectl get endpoints -n apps
+
+# Use minikube tunnel for LoadBalancer services (run in separate PowerShell window)
+minikube tunnel
+```
+
+**Runner not registering:**
+```powershell
+# Check if secret exists
+kubectl get secret github-runner-secret -n apps
+
+# Check runner logs
+kubectl logs -n apps -l app=github-runner
+
+# Verify token has correct permissions
+```
+
+**Docker Desktop not starting:**
+- Ensure Hyper-V or WSL2 is enabled in Windows Features
+- Restart Docker Desktop
+- Check Docker Desktop logs in the system tray icon
 
 ## Directory Structure
+
 ```
 k8s/
-├── app-deployment.yml           # Application deployment manifest
-├── elasticsearch-deployment.yml # Elasticsearch deployment
-├── fluent-bit-daemonset.yml    # Log collection agent
-├── grafana-deployment.yml       # Grafana monitoring
-├── github-runner-deployment.yml # CI/CD runner
-├── postgres-backup-cronjob.yml  # Database backup automation
-└── logging-stack-deploy.sh      # Logging stack deployment script
+├── elasticsearch-deployment.yml    # Elasticsearch for log storage
+├── fluent-bit-daemonset.yml       # Log collection from all pods
+├── grafana-deployment.yml          # Grafana visualization
+├── github-runner-deployment.yml    # Self-hosted GitHub Actions runner
+├── logging-stack-deploy.sh         # Script to deploy logging stack
+└── github-runner-deploy.sh         # Script to deploy GitHub runner
 ```
 
-## Application Migration
+## Next Steps
 
-The Spring Boot application has been moved to a separate repository for better separation of concerns.
-- Application code: See `springboot-app-export/` directory (ready to be moved to a new repository)
-- This repository focuses on platform infrastructure and deployment configurations
+1. Deploy your applications to the `apps` namespace
+2. Configure Grafana dashboards for monitoring
+3. Set up alerts in Grafana
+4. Configure CI/CD pipelines using the GitHub runner
+5. Add application-specific infrastructure as needed
 
 ## Contributing
 
-When adding new infrastructure components:
-1. Add manifests to the `k8s/` directory
+When adding new infrastructure:
+1. Add manifests to `k8s/` directory
 2. Update this README with deployment instructions
-3. Include monitoring and logging configurations
-4. Document any required secrets or configuration
+3. Test deployment on fresh Minikube cluster
+4. Document any secrets or configuration requirements
